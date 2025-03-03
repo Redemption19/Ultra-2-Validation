@@ -13,11 +13,11 @@ class DashboardUtils:
         folder_path = st.text_input(
             "Enter folder path:",
             value=st.session_state.get('persistent_folder_path', ''),  # Get saved path
-            key=f"folder_input_{key_suffix}"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
+            key=f"folder_input_{key_suffix}"
         )
         
         if folder_path and os.path.exists(folder_path):
-            # Save the path to session state for persisten                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              ce
+            # Save the path to session state for persistence
             st.session_state.folder_path = folder_path
             st.session_state.persistent_folder_path = folder_path  # Save for persistence
             return folder_path
@@ -692,12 +692,9 @@ class Dashboard:
                 except Exception as e:
                     st.error(f"Error during search: {str(e)}")
 
-
-   
-
     def validation(self):
         """Handle Validation functionality"""
-        st.header("✅ Validation")
+        st.header("Validation")
         
         # Get main company folder path
         main_folder_path = self.utils.select_folder("validation")
@@ -740,11 +737,33 @@ class Dashboard:
             for _, row in vlookup_db.iterrows():
                 ssnit = str(row['Ssnit']).strip()
                 vlookup_dict[ssnit] = {
-                    'accountno': str(row['Accountno']).strip(),
-                    'surname': row['Surname'],
-                    'first_name': row['First_Name'],
-                    'other_name': row['Other_Names']
+                    'accountno': str(row['Accountno']).strip() if pd.notna(row['Accountno']) else None,
+                    'surname': row['Surname'] if pd.notna(row['Surname']) else None,
+                    'first_name': row['First_Name'] if pd.notna(row['First_Name']) else None,
+                    'other_name': row['Other_Names'] if pd.notna(row['Other_Names']) else None
                 }
+            
+            # Add master data for missing entries
+            for _, row in master_df.iterrows():
+                ssnit = str(row['Ssnit']).strip()
+                if ssnit not in vlookup_dict:
+                    vlookup_dict[ssnit] = {
+                        'accountno': str(row['Client Account Number']).strip() if pd.notna(row['Client Account Number']) else None,
+                        'surname': row['Surname'] if pd.notna(row['Surname']) else None,
+                        'first_name': row['First Name'] if pd.notna(row['First Name']) else None,
+                        'other_name': row['Other Names'] if pd.notna(row['Other Names']) else None
+                    }
+                else:
+                    # Fill in missing data from master
+                    entry = vlookup_dict[ssnit]
+                    if not entry['accountno']:
+                        entry['accountno'] = str(row['Client Account Number']).strip() if pd.notna(row['Client Account Number']) else None
+                    if not entry['surname']:
+                        entry['surname'] = row['Surname']
+                    if not entry['first_name']:
+                        entry['first_name'] = row['First Name']
+                    if not entry['other_name']:
+                        entry['other_name'] = row['Other Names']
             
             # Process files
             files_to_process = []
@@ -763,7 +782,7 @@ class Dashboard:
                 return
             
             # Display files
-            st.subheader("📁 Files to Process")
+            st.subheader("Files to Process")
             files_df = pd.DataFrame(files_to_process)
             st.dataframe(files_df[['name', 'status']], hide_index=True)
             
@@ -785,10 +804,9 @@ class Dashboard:
                             mask = df['ssnit'] == ssnit_num
                             if ssnit_num in vlookup_dict:
                                 data = vlookup_dict[ssnit_num]
-                                df.loc[mask, 'accountno'] = data['accountno']
-                                df.loc[mask, 'surname'] = data['surname']
-                                df.loc[mask, 'first_name'] = data['first_name']
-                                df.loc[mask, 'other_name'] = data['other_name']
+                                for field, value in data.items():
+                                    if value:  # Only update if value exists
+                                        df.loc[mask, field] = value
                         
                         # Calculate tiers
                         df['salary'] = pd.to_numeric(df['salary'].astype(str).str.replace(',', '').str.strip(), errors='coerce')
@@ -799,10 +817,10 @@ class Dashboard:
                         output_columns = ['accountno', 'surname', 'first_name', 'other_name', 'ssnit', 'tier1', 'tier2']
                         df[output_columns].to_excel(file_path, index=False)
                         
-                        files_df.loc[idx, 'status'] = 'Processed ✅'
+                        files_df.loc[idx, 'status'] = 'Processed'
                         
                     except Exception as e:
-                        files_df.loc[idx, 'status'] = 'Failed ❌'
+                        files_df.loc[idx, 'status'] = 'Failed'
                         st.error(f"Error processing {file_info['name']}: {str(e)}")
                     
                     progress_bar.progress((idx + 1) / len(files_to_process))
@@ -810,13 +828,11 @@ class Dashboard:
                 progress_bar.empty()
                 status_text.empty()
                 
-                st.success("Validation completed! 🎉")
+                st.success("Validation completed!")
                 st.dataframe(files_df[['name', 'status']], hide_index=True)
                 
         except Exception as e:
             st.error(f"Error during validation: {str(e)}")
-
-    # ... rest of the Dashboard class methods ...
 
     def append_total(self):
         """Handle Append Total functionality""" 
@@ -1106,101 +1122,57 @@ def standardize_name(name):
     """Standardize name by sorting words alphabetically"""
     return ' '.join(sorted(str(name).upper().split()))
 
-def create_consistent_ssnit_mapping(vlookup_dict, master_dict):
-    """Create a consistent SSNIT to Account mapping with single account per SSNIT"""
-    st.subheader("🔄 Account Number Standardization")
+def create_comprehensive_mapping(vlookup_df, master_df):
+    """Create a comprehensive mapping using both VLOOKUP and master data"""
+    mapping = {}
     
-    ssnit_mapping = {}
-    standardization_report = []
+    # Clean and standardize SSNIT numbers in both dataframes
+    vlookup_df['Ssnit'] = vlookup_df['Ssnit'].astype(str).str.strip()
+    master_df['Ssnit'] = master_df['Ssnit'].astype(str).str.strip()
     
-    # First collect all entries with their names for each SSNIT
-    ssnit_entries = {}
-    for ssnit, data in vlookup_dict.items():
-        ssnit = str(ssnit).strip()
-        if ssnit not in ssnit_entries:
-            ssnit_entries[ssnit] = []
-        
-        # Create full name for comparison
-        full_name = ' '.join(filter(None, [
-            str(data['Surname']).strip(),
-            str(data['First_Name']).strip(),
-            str(data['Other_Names']).strip()
-        ])).upper()
-        
-        ssnit_entries[ssnit].append({
-            'accountno': data['Accountno'],
-            'surname': data['Surname'],
-            'first_name': data['First_Name'],
-            'other_name': data['Other_Names'],
-            'full_name': full_name,
-            'source': 'VLOOKUP'
-        })
+    # First populate from VLOOKUP (primary source)
+    for _, row in vlookup_df.iterrows():
+        ssnit = row['Ssnit']
+        if pd.notna(ssnit) and str(ssnit).strip():
+            mapping[ssnit] = {
+                'accountno': str(row['Accountno']).strip() if pd.notna(row['Accountno']) else None,
+                'surname': str(row['Surname']).strip() if pd.notna(row['Surname']) else None,
+                'first_name': str(row['First_Name']).strip() if pd.notna(row['First_Name']) else None,
+                'other_name': str(row['Other_Names']).strip() if pd.notna(row['Other_Names']) else None,
+                'source': 'VLOOKUP'
+            }
     
-    # Process entries and standardize account numbers
-    for ssnit, entries in ssnit_entries.items():
-        if len(entries) > 1:
-            # Find the primary account number (first non-NA account)
-            primary_entry = next(
-                (e for e in entries if e['accountno'] != '#N/A'), 
-                entries[0]
-            )
-            
-            # Use this account number for all entries with the same SSNIT
-            standardization_report.append({
-                'SSNIT': ssnit,
-                'Original Entries': [
-                    f"{e['accountno']} - {e['full_name']}" 
-                    for e in entries
-                ],
-                'Selected Account': primary_entry['accountno'],
-                'Action': 'Standardized to same account number'
-            })
-            
-            # Update all entries to use the same account number
-            for entry in entries:
-                entry['accountno'] = primary_entry['accountno']
-        
-        # Store the standardized entries
-        ssnit_mapping[ssnit] = entries[0]
-    
-    # Show standardization report
-    if standardization_report:
-        st.warning(f"Found {len(standardization_report)} SSNIT numbers with multiple entries")
-        with st.expander("View Account Number Standardization Details"):
-            st.dataframe(
-                pd.DataFrame(standardization_report),
-                column_config={
-                    "SSNIT": "SSNIT Number",
-                    "Original Entries": "Original Entries (Account - Name)",
-                    "Selected Account": "Standardized Account Number",
-                    "Action": "Action Taken"
-                },
-                hide_index=True
-            )
-            
-            # Show example
-            st.markdown("##### Example of Standardization:")
-            st.code("""
-            Before standardization:
-            THF8777676 Kweku Bis C1122
-            GH6655G Bis Kweku C1122
-
-            After standardization:
-            THF8777676 Kweku Bis C1122
-            THF8777676 Bis Kweku C1122
-            """)
-            
-            if st.button("Proceed with Standardization", key="standardize_accounts"):
-                return ssnit_mapping
+    # Supplement with master data where missing
+    for _, row in master_df.iterrows():
+        ssnit = row['Ssnit']
+        if pd.notna(ssnit) and str(ssnit).strip():
+            if ssnit not in mapping:
+                # Add new entry from master
+                mapping[ssnit] = {
+                    'accountno': str(row['Client Account Number']).strip() if pd.notna(row['Client Account Number']) else None,
+                    'surname': str(row['Surname']).strip() if pd.notna(row['Surname']) else None,
+                    'first_name': str(row['First Name']).strip() if pd.notna(row['First Name']) else None,
+                    'other_name': str(row['Other Names']).strip() if pd.notna(row['Other Names']) else None,
+                    'source': 'Master'
+                }
             else:
-                return None
+                # Fill in missing data from master
+                entry = mapping[ssnit]
+                if not entry['accountno']:
+                    entry['accountno'] = str(row['Client Account Number']).strip() if pd.notna(row['Client Account Number']) else None
+                if not entry['surname']:
+                    entry['surname'] = str(row['Surname']).strip() if pd.notna(row['Surname']) else None
+                if not entry['first_name']:
+                    entry['first_name'] = str(row['First Name']).strip() if pd.notna(row['First Name']) else None
+                if not entry['other_name']:
+                    entry['other_name'] = str(row['Other Names']).strip() if pd.notna(row['Other Names']) else None
     
-    return ssnit_mapping
+    return mapping
 
 def process_dataframe(df, vlookup_dict, master_dict):
     """Process DataFrame using consistent SSNIT-Account mapping"""
     # Get the consistent mapping
-    ssnit_mapping = create_consistent_ssnit_mapping(vlookup_dict, master_dict)
+    ssnit_mapping = create_comprehensive_mapping(vlookup_dict, master_dict)
     
     # Convert to string and clean SSNIT numbers
     df['ssnit'] = df['ssnit'].astype(str).str.strip()
@@ -1225,7 +1197,7 @@ def process_dataframe(df, vlookup_dict, master_dict):
 def check_and_standardize_accounts(folder_path, vlookup_dict, master_dict):
     """Check and standardize account numbers for each SSNIT before validation"""
     # Create consistent SSNIT mapping
-    ssnit_mapping = create_consistent_ssnit_mapping(vlookup_dict, master_dict)
+    ssnit_mapping = create_comprehensive_mapping(vlookup_dict, master_dict)
     
     if ssnit_mapping is None:
         return False
@@ -1332,90 +1304,53 @@ def check_individual_schedule_duplicates(folder_path):
             return True
         return False
 
-def create_consistent_ssnit_mapping(vlookup_dict, master_dict):
-    """Create a consistent SSNIT to Account mapping with exact matching"""
-    st.subheader("🔄 Account Standardization Check")
+def create_comprehensive_mapping(vlookup_df, master_df):
+    """Create a comprehensive mapping using both VLOOKUP and master data"""
+    mapping = {}
     
-    ssnit_mapping = {}
-    standardization_report = []
+    # Clean and standardize SSNIT numbers in both dataframes
+    vlookup_df['Ssnit'] = vlookup_df['Ssnit'].astype(str).str.strip().upper()
+    master_df['Ssnit'] = master_df['Ssnit'].astype(str).str.strip().upper()
     
-    # First collect all entries from VLOOKUP
-    for ssnit, data in vlookup_dict.items():
-        ssnit = str(ssnit).strip()  # Ensure clean SSNIT
-        if ssnit not in ssnit_mapping:
-            ssnit_mapping[ssnit] = {
-                'accountno': data['Accountno'],
-                'surname': data['Surname'],
-                'first_name': data['First_Name'],
-                'other_name': data['Other_Names'],
-                'source': 'VLOOKUP',
-                'accounts': set([data['Accountno']])
+    # Track unmapped SSNITs
+    unmapped_ssnits = set()
+    
+    # First populate from VLOOKUP (primary source)
+    for _, row in vlookup_df.iterrows():
+        ssnit = row['Ssnit']
+        if pd.notna(ssnit) and str(ssnit).strip() and ssnit not in ['NAN', 'NONE', '']:
+            mapping[ssnit] = {
+                'accountno': str(row['Accountno']).strip() if pd.notna(row['Accountno']) else '',
+                'surname': str(row['Surname']).strip() if pd.notna(row['Surname']) else '',
+                'first_name': str(row['First_Name']).strip() if pd.notna(row['First_Name']) else '',
+                'other_name': str(row['Other_Names']).strip() if pd.notna(row['Other_Names']) else '',
+                'source': 'VLOOKUP'
             }
     
-    # Check master dict entries
-    for ssnit, data in master_dict.items():
-        ssnit = str(ssnit).strip()
-        if ssnit in ssnit_mapping:
-            ssnit_mapping[ssnit]['accounts'].add(data['Client Account Number'])
-        else:
-            ssnit_mapping[ssnit] = {
-                'accountno': data['Client Account Number'],
-                'surname': data['Surname'],
-                'first_name': data['First Name'],
-                'other_name': data['Other Names'],
-                'source': 'Master',
-                'accounts': set([data['Client Account Number']])
-            }
-    
-    # Find SSNITs with multiple accounts
-    for ssnit, data in ssnit_mapping.items():
-        if len(data['accounts']) > 1:
-            standardization_report.append({
-                'SSNIT': ssnit,
-                'Selected Account': data['accountno'],
-                'All Accounts': list(data['accounts']),
-                'Source': data['source']
-            })
-    
-    if standardization_report:
-        st.warning(f"Found {len(standardization_report)} SSNIT numbers with multiple accounts")
-        
-        # Show details in expander
-        with st.expander("View Account Number Details"):
-            st.dataframe(
-                pd.DataFrame(standardization_report),
-                column_config={
-                    "SSNIT": "SSNIT Number",
-                    "Selected Account": "Selected Account Number",
-                    "All Accounts": "Found Account Numbers",
-                    "Source": "Data Source"
-                },
-                hide_index=True
-            )
-            
-            # Example of standardization
-            st.markdown("##### What will happen:")
-            st.code("""
-            Before:
-            SSNIT: C1122 -> Account: THF8777676
-            SSNIT: C1122 -> Account: GH6655G
-            SSNIT: C1122 -> Account: XYZ1234
-
-            After:
-            SSNIT: C1122 -> Account: THF8777676
-            """)
-            
-            # Confirmation button
-            if st.button("Proceed with Standardization"):
-                return ssnit_mapping
+    # Supplement with master data
+    for _, row in master_df.iterrows():
+        ssnit = row['Ssnit']
+        if pd.notna(ssnit) and str(ssnit).strip() and ssnit not in ['NAN', 'NONE', '']:
+            if ssnit not in mapping:
+                mapping[ssnit] = {
+                    'accountno': str(row['Client Account Number']).strip() if pd.notna(row['Client Account Number']) else '',
+                    'surname': str(row['Surname']).strip() if pd.notna(row['Surname']) else '',
+                    'first_name': str(row['First Name']).strip() if pd.notna(row['First Name']) else '',
+                    'other_name': str(row['Other Names']).strip() if pd.notna(row['Other Names']) else '',
+                    'source': 'Master'
+                }
             else:
-                return None
+                # Fill in missing data from master
+                entry = mapping[ssnit]
+                if not entry['accountno']:
+                    entry['accountno'] = str(row['Client Account Number']).strip() if pd.notna(row['Client Account Number']) else ''
     
-    return ssnit_mapping
+    return mapping
 
 def process_schedule_files(folder_path, ssnit_mapping):
-    """Process schedule files with standardized account numbers"""
+    """Process schedule files with improved validation"""
     modified_files = []
+    unmapped_records = []
     
     for root, _, files in os.walk(folder_path):
         for file in files:
@@ -1426,24 +1361,58 @@ def process_schedule_files(folder_path, ssnit_mapping):
                     df = pd.read_excel(file_path)
                     if 'ssnit' not in df.columns:
                         continue
-                        
-                    df['ssnit'] = df['ssnit'].astype(str).str.strip()
                     
-                    # Update account numbers
+                    # Clean SSNIT numbers
+                    df['ssnit'] = df['ssnit'].astype(str).str.strip().upper()
+                    
+                    # Track changes and unmapped SSNITs
+                    changes_made = False
+                    file_unmapped = []
+                    
+                    # Process each row
                     for idx, row in df.iterrows():
                         ssnit = row['ssnit']
+                        if ssnit in ['NAN', 'NONE', '']:
+                            continue
+                            
                         if ssnit in ssnit_mapping:
-                            df.at[idx, 'accountno'] = ssnit_mapping[ssnit]['accountno']
+                            # Update only if data exists in mapping
+                            data = ssnit_mapping[ssnit]
+                            if data['accountno']:  # Only update if we have a valid account number
+                                df.at[idx, 'accountno'] = data['accountno']
+                                df.at[idx, 'surname'] = data['surname']
+                                df.at[idx, 'first_name'] = data['first_name']
+                                df.at[idx, 'other_name'] = data['other_name']
+                                changes_made = True
+                        else:
+                            # Track unmapped SSNITs
+                            file_unmapped.append({
+                                'file': file,
+                                'ssnit': ssnit,
+                                'row': idx + 1
+                            })
                     
-                    # Save changes
-                    df.to_excel(file_path, index=False)
-                    modified_files.append(file)
+                    # Save changes if any were made
+                    if changes_made:
+                        df.to_excel(file_path, index=False)
+                        modified_files.append(file)
+                    
+                    # Add unmapped records
+                    unmapped_records.extend(file_unmapped)
                     
                 except Exception as e:
                     st.error(f"Error processing {file}: {str(e)}")
     
+    # Display results
     if modified_files:
-        st.success(f"Updated {len(modified_files)} files with standardized account numbers")
+        st.success(f"✅ Updated {len(modified_files)} files with standardized data")
+    
+    if unmapped_records:
+        st.warning("⚠️ Found unmapped SSNIT numbers:")
+        for record in unmapped_records:
+            st.write(f"File: {record['file']}, Row: {record['row']}, SSNIT: {record['ssnit']}")
+    
+    return modified_files, unmapped_records
         
     # Add this at the bottom of the file:
 if __name__ == "__main__":
