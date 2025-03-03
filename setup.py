@@ -9,7 +9,7 @@ setup(
         'streamlit>=1.24.0',
         'pandas==2.0.3',
         'pathlib==1.0.1',
-        'Pillow==9.5.0',
+        'Pillow==10.0.0',
         'rich>=13.9.4'
     ],
     python_requires='>=3.8'
