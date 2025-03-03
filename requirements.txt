@@ -2,5 +2,5 @@ openpyxl==3.1.2
 streamlit>=1.24.0
 pandas==2.0.3
 pathlib==1.0.1
-Pillow==9.5.0
+pillow==9.5.0 --no-binary :all:
 rich>=13.9.4

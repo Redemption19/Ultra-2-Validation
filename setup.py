@@ -12,10 +12,5 @@ setup(
         'Pillow==9.5.0',
         'rich>=13.9.4'
     ],
-    python_requires='>=3.8',
-    options={
-        'bdist_wheel': {
-            'universal': True
-        }
-    }
+    python_requires='>=3.8'
 ) 
