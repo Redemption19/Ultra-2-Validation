@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import os
 from pathlib import Path
-import subprocess
 from openpyxl import load_workbook
 from openpyxl.styles import Font
 

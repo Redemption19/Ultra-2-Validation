@@ -6,7 +6,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         'openpyxl==3.1.2',
-        'streamlit==1.24.0',
+        'streamlit>=1.28.0',
         'pandas==2.0.3',
         'pathlib==1.0.1',
         'Pillow==10.0.0',
