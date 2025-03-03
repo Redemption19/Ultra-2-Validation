@@ -1,6 +1,5 @@
 python3-pil
-libjpeg-dev
-libjpeg8-dev
+libjpeg62-turbo-dev
 libfreetype6-dev
 liblcms2-dev
 zlib1g-dev
