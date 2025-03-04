@@ -5,46 +5,68 @@ from pathlib import Path
 from openpyxl import load_workbook
 from openpyxl.styles import Font
 
+# Set deployment flag
+st.session_state['is_deployed'] = True  # Set to False for local development
+
 class DashboardUtils:
     @staticmethod
     def select_folder(key_suffix="default"):
         """Provides folder path input functionality with persistent state"""
         
+        # Create container for uploaded files
+        if 'uploaded_files' not in st.session_state:
+            st.session_state.uploaded_files = {}
+            
+        if f'files_{key_suffix}' not in st.session_state.uploaded_files:
+            st.session_state.uploaded_files[f'files_{key_suffix}'] = []
+
         # Add file uploader for folder selection
         uploaded_files = st.file_uploader(
-            "Upload files from folder:",
+            "Upload Excel files:",
+            type=['xlsx'],
             accept_multiple_files=True,
             key=f"folder_files_{key_suffix}"
         )
 
         if uploaded_files:
-            # Create temporary directory to store uploaded files
+            # Create temporary directory
             temp_dir = Path("temp_uploads")
             temp_dir.mkdir(exist_ok=True)
             
-            # Save uploaded files
+            # Clear previous files for this key
+            for old_file in temp_dir.glob('*'):
+                old_file.unlink()
+            
+            # Save new files
             for uploaded_file in uploaded_files:
                 file_path = temp_dir / uploaded_file.name
                 with open(file_path, "wb") as f:
                     f.write(uploaded_file.getbuffer())
-            
-            # Store path in session state
+                    
+            # Update session state
+            st.session_state.uploaded_files[f'files_{key_suffix}'] = uploaded_files
             st.session_state.folder_path = str(temp_dir)
             st.session_state.persistent_folder_path = str(temp_dir)
             
+            # Show uploaded files
+            st.success(f"📁 Uploaded {len(uploaded_files)} files")
+            for file in uploaded_files:
+                st.write(f"- {file.name}")
+                
             return str(temp_dir)
-            
-        # Keep text input for local development
-        folder_path = st.text_input(
-            "Or enter folder path (local development only):",
-            value=st.session_state.get('persistent_folder_path', ''),
-            key=f"folder_input_{key_suffix}"
-        )
         
-        if folder_path and os.path.exists(folder_path):
-            st.session_state.folder_path = folder_path
-            st.session_state.persistent_folder_path = folder_path
-            return folder_path
+        # For local development only
+        if not st.session_state.get('is_deployed', True):  # Add this flag
+            folder_path = st.text_input(
+                "Or enter folder path (local development only):",
+                value=st.session_state.get('persistent_folder_path', ''),
+                key=f"folder_input_{key_suffix}"
+            )
+            
+            if folder_path and os.path.exists(folder_path):
+                st.session_state.folder_path = folder_path
+                st.session_state.persistent_folder_path = folder_path
+                return folder_path
             
         return None
 
