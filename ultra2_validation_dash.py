@@ -9,17 +9,43 @@ class DashboardUtils:
     @staticmethod
     def select_folder(key_suffix="default"):
         """Provides folder path input functionality with persistent state"""
+        
+        # Add file uploader for folder selection
+        uploaded_files = st.file_uploader(
+            "Upload files from folder:",
+            accept_multiple_files=True,
+            key=f"folder_files_{key_suffix}"
+        )
+
+        if uploaded_files:
+            # Create temporary directory to store uploaded files
+            temp_dir = Path("temp_uploads")
+            temp_dir.mkdir(exist_ok=True)
+            
+            # Save uploaded files
+            for uploaded_file in uploaded_files:
+                file_path = temp_dir / uploaded_file.name
+                with open(file_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+            
+            # Store path in session state
+            st.session_state.folder_path = str(temp_dir)
+            st.session_state.persistent_folder_path = str(temp_dir)
+            
+            return str(temp_dir)
+            
+        # Keep text input for local development
         folder_path = st.text_input(
-            "Enter folder path:",
-            value=st.session_state.get('persistent_folder_path', ''),  # Get saved path
+            "Or enter folder path (local development only):",
+            value=st.session_state.get('persistent_folder_path', ''),
             key=f"folder_input_{key_suffix}"
         )
         
         if folder_path and os.path.exists(folder_path):
-            # Save the path to session state for persistence
             st.session_state.folder_path = folder_path
-            st.session_state.persistent_folder_path = folder_path  # Save for persistence
+            st.session_state.persistent_folder_path = folder_path
             return folder_path
+            
         return None
 
 class Dashboard:
@@ -773,7 +799,7 @@ class Dashboard:
                         files_to_process.append({
                             'path': os.path.join(root, file),
                             'name': file,
-                            'status': 'Pending'
+                            'status': 'Pending ⌛'
                         })
             
             if not files_to_process:
@@ -816,7 +842,7 @@ class Dashboard:
                         output_columns = ['accountno', 'surname', 'first_name', 'other_name', 'ssnit', 'tier1', 'tier2']
                         df[output_columns].to_excel(file_path, index=False)
                         
-                        files_df.loc[idx, 'status'] = 'Processed'
+                        files_df.loc[idx, 'status'] = 'Processed ✅'
                         
                     except Exception as e:
                         files_df.loc[idx, 'status'] = 'Failed'
@@ -887,7 +913,7 @@ class Dashboard:
                         all_files.append({
                             'Folder': folder,
                             'File Name': file,
-                            'Status': 'Pending'
+                            'Status': 'Pending ⏳'
                         })
             
             if all_files:
